@@ -1,6 +1,5 @@
 package com.redhat.developer.demos.preference;
 
-import org.apache.camel.ExchangePattern;
 import org.apache.camel.ExchangeTimedOutException;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;

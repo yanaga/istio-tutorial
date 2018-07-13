@@ -20,8 +20,12 @@ public class PreferenceCamelRoute extends RouteBuilder {
                 .routeId("preference-route")
                 .log(LoggingLevel.INFO, "Received preference message ${id}")
                 .process(e -> recommendationRepository.save(e.getIn().getBody(String.class)))
-                .to("direct:sendToTopic");
-        from("direct:sendToTopic")
+                .transform(body().prepend("preference => "))
+                .to("jms:preferenceTopic");
+        from("timer://simple?period=10s&delay=10s")
+                .routeId("preferenceTimer-route")
+                .log(LoggingLevel.INFO, "Sending timed preference message ${id}")
+                .process(e -> e.getOut().setBody(recommendationRepository.get()))
                 .transform(body().prepend("preference => "))
                 .to("jms:preferenceTopic");
     }
