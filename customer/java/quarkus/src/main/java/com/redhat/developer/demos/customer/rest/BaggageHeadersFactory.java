@@ -1,5 +1,6 @@
 package com.redhat.developer.demos.customer.rest;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
 
 import javax.ws.rs.core.MultivaluedHashMap;
