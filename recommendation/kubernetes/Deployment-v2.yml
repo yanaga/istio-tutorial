@@ -25,7 +25,9 @@ spec:
       - env:
         - name: JAVA_OPTIONS
           value: -Xmx256m
-        image: example/recommendation:v2
+        - name: VERSION
+          value: v2
+        image: example/recommendation:v1
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:

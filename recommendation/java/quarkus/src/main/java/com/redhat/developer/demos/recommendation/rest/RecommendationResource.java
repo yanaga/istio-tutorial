@@ -1,57 +1,76 @@
 package com.redhat.developer.demos.recommendation.rest;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PostConstruct;
+import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 @Path("/")
+@Produces(MediaType.TEXT_PLAIN)
 public class RecommendationResource {
 
-    private static final String RESPONSE_STRING_FORMAT = "recommendation v1 from '%s': %d\n";
-
-    private static final String RESPONSE_STRING_NOW_FORMAT = "recommendation v3 %s from '%s': %d\n";
-
     private final Logger logger = LoggerFactory.getLogger(getClass());
+
+    @Inject
+    @ConfigProperty(name = "version", defaultValue = "v1")
+    Version version;
+
+    @Inject
+    @ConfigProperty(name = "hostname", defaultValue = "unknown")
+    Hostname hostname;
+
+    String responseStringFormat;
+
+    @PostConstruct
+    void init() {
+        this.responseStringFormat = String.format("recommendation %s from '%s': %%s", version, hostname);
+    }
+
+    @Inject
+    @RestClient
+    WorldTimeService worldTimeService;
 
     /**
      * Counter to help us see the lifecycle
      */
-    private int count = 0;
+    private int count = 1;
 
     /**
      * Flag for throwing a 503 when enabled
      */
     private boolean misbehave = false;
 
-    private static final String HOSTNAME = parseContainerIdFromHostname(
-            System.getenv().getOrDefault("HOSTNAME", "unknown"));
-
-    static String parseContainerIdFromHostname(String hostname) {
-        return hostname.replaceAll("recommendation-v\\d+-", "");
-    }
-
     @GET
     public Response getRecommendations() {
-        count++;
-        logger.info(String.format("recommendation request from %s: %d", HOSTNAME, count));
+        logger.info(String.format("recommendation request from %s: %d", hostname, count));
 
-        // timeout();
+        if (version.isTimeout()) {
+            timeout();
+        }
 
         logger.debug("recommendation service ready to return");
+
         if (misbehave) {
             return doMisbehavior();
         }
-        return Response.ok(String.format(RESPONSE_STRING_FORMAT, HOSTNAME, count)).build();
-        // return Response.ok(String.format(RESPONSE_STRING_NOW_FORMAT, getNow(), HOSTNAME, count)).build();
+        if (version.isMakeExternalRequest()) {
+            try {
+                return Response.ok(String.format(responseStringFormat, worldTimeService.getNow())).build();
+            } catch (WebApplicationException ex) {
+                return Response.ok(String.format(responseStringFormat, ex.getMessage())).build();
+            }
+        } else {
+            return Response.ok(String.format(responseStringFormat, count++)).build();
+        }
     }
 
     private void timeout() {
@@ -65,7 +84,7 @@ public class RecommendationResource {
     private Response doMisbehavior() {
         logger.debug(String.format("Misbehaving %d", count));
         return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-                .entity(String.format("recommendation misbehavior from '%s'\n", HOSTNAME)).build();
+                .entity(String.format("recommendation misbehavior from '%s'\n", hostname)).build();
     }
 
     @GET
@@ -73,7 +92,7 @@ public class RecommendationResource {
     public Response flagMisbehave() {
         this.misbehave = true;
         logger.debug("'misbehave' has been set to 'true'");
-        return Response.ok("Following requests to / will return a 503\n").build();
+        return Response.ok("Following requests to / will return 503\n").build();
     }
 
     @GET
@@ -82,13 +101,6 @@ public class RecommendationResource {
         this.misbehave = false;
         logger.debug("'misbehave' has been set to 'false'");
         return Response.ok("Following requests to / will return 200\n").build();
-    }
-
-    private String getNow() {
-        final Client client = ClientBuilder.newClient();
-        final Response res = client.target("http://worldclockapi.com/api/json/cet/now").request().get();
-        final String jsonObject = res.readEntity(String.class);
-        return Json.createReader(new ByteArrayInputStream(jsonObject.getBytes())).readObject().getString("currentDateTime");
     }
 
 }
